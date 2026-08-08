@@ -10,10 +10,20 @@ variable instance_type {
     description = "specify instance type"
 }
 
-variable name {
+variable ec2_name {
   type        = string
   default     = ""
   description = "description"
 }
 
+
+variable vpc_security_group_ids{
+  type = list(string)
+}
+
+
+variable subnet_id {
+  type        = string
+
+}
 

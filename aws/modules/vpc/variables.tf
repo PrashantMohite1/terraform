@@ -16,3 +16,9 @@ variable cidr_block {
   default     = ""
   description = "description"
 }
+
+variable vpc_name {
+  type        = string
+  default     = ""
+  description = "description"
+}
