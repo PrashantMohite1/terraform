@@ -7,4 +7,5 @@ resource aws_instance Server {
     tags = {
         Name = var.ec2_name
     }
+    associate_public_ip_address = var.associate_public_ip_address
 }

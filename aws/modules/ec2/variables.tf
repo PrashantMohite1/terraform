@@ -27,3 +27,9 @@ variable subnet_id {
 
 }
 
+
+variable associate_public_ip_address {
+  type        = bool
+  default     = true
+}
+

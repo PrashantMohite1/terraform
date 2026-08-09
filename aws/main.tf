@@ -24,12 +24,24 @@ data aws_ami "ubuntu" {
 module "server-1"{
     source = "./modules/ec2/"
     ami_id = data.aws_ami.ubuntu.id 
-    instance_type = "t2.micro"
+    instance_type = "t4g.small"
     ec2_name = "master"
     subnet_id = aws_subnet.pub-sub-1.id
     vpc_security_group_ids = [aws_security_group.sg1.id]
+    associate_public_ip_address = true
 
 }
+
+# module "server-2"{
+#     source = "./modules/ec2/"
+#     ami_id = data.aws_ami.ubuntu.id 
+#     instance_type = "t4g.small"
+#     ec2_name = "worker-node-1"
+#     subnet_id = aws_subnet.pub-sub-1.id
+#     vpc_security_group_ids = [aws_security_group.sg1.id]
+#     associate_public_ip_address = true
+
+# }
 
 module "vpc_1"{
     source = "./modules/vpc/"
@@ -63,9 +75,14 @@ resource "aws_route_table" "rt1" {
 
   # since this is exactly the route AWS will create, the route will be adopted
   route {
-    cidr_block = "0.0.0.0"
+    cidr_block = "0.0.0.0/0"
     gateway_id = aws_internet_gateway.igw.id
   }
+
+tags = {
+  Name = "${local.env}-route-table-1"
+}
+
 }
 
 
@@ -96,4 +113,5 @@ resource "aws_security_group" "sg1" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 }
+
 
