@@ -78,33 +78,65 @@ Your container runtime must support v1 of the container runtime interface.
 Kubernetes starting v1.26 only works with v1 of the CRI API. If a container runtime does not support the v1 API, the kubelet will not register as a node
 
 
-### Install Kubectl 
+Installation commands 
 
 ```
-Update the apt package index and install packages needed to use the Kubernetes apt repository:
-
 sudo apt-get update
 # apt-transport-https may be a dummy package; if so, you can skip that package
-sudo apt-get install -y apt-transport-https ca-certificates curl gnupg
+sudo apt-get install -y apt-transport-https ca-certificates curl gpg
 
-Download the public signing key for the Kubernetes package repositories. The same signing key is used for all repositories so you can disregard the version in the URL:
-# If the folder `/etc/apt/keyrings` does not exist, it should be created before the curl command, read the note below.
+# If the directory `/etc/apt/keyrings` does not exist, it should be created before the curl command, read the note below.
 # sudo mkdir -p -m 755 /etc/apt/keyrings
 curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.36/deb/Release.key | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
-sudo chmod 644 /etc/apt/keyrings/kubernetes-apt-keyring.gpg # allow unprivileged APT programs to read this keyring
+
+
 ```
 
-Add the appropriate Kubernetes apt repository. If you want to use Kubernetes version different than v1.36, replace v1.36 with the desired minor version in the command below:
+Add the appropriate Kubernetes apt repository. Please note that this repository have packages only for Kubernetes 1.36; for other Kubernetes minor versions, you need to change the Kubernetes minor version in the URL to match your desired minor version (you should also check that you are reading the documentation for the version of Kubernetes that you plan to install).
 
-This overwrites any existing configuration in /etc/apt/sources.list.d/kubernetes.list
 ```
 echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.36/deb/ /' | sudo tee /etc/apt/sources.list.d/kubernetes.list
-sudo chmod 644 /etc/apt/sources.list.d/kubernetes.list   # helps tools such as command-not-found to 
+
 ```
 
-Update apt package index, then install kubectl:
 ```
 sudo apt-get update
-sudo apt-get install -y kubectl
+sudo apt-get install -y kubelet kubeadm kubectl
+sudo apt-mark hold kubelet kubeadm kubectl
+sudo systemctl enable --now kubelet
 ```
 
+
+### Initializing your control-plane node
+```
+kubeadm init <args>
+```
+
+
+init options : 
+- (Recommended) If you have plans to upgrade this single control-plane kubeadm cluster to high availability you should specify the `--control-plane-endpoint` to set the shared endpoint for all control-plane nodes. Such an endpoint can be either a DNS name or an IP address of a load-balancer.
+
+- Choose a Pod network add-on, and verify whether it requires any arguments to be passed to kubeadm init. Depending on which third-party provider you choose, you might need to set the `--pod-network-cidr` to a provider-specific value. See Installing a Pod network add-on.
+
+
+```
+mkdir -p $HOME/.kube
+sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+sudo chown $(id -u):$(id -g) $HOME/.kube/config
+```
+
+
+
+CNI installation : 
+in order to talk to containers , networking of container we need cni plugins. there are bunch of cni (container network interface) plugins such as
+calico, flannel , cannel and many more. 
+
+calico installation steps
+
+```
+# Install Tigera Operator
+kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.32.1/manifests/tigera-operator.yaml
+
+# Install Calico Custom Resources (requires custom-resources.yaml)
+kubectl create -f custom-resources.yaml   
+```
