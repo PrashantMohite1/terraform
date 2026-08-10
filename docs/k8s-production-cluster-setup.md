@@ -22,17 +22,28 @@ The Container Runtime Interface (CRI)
 
 ### Version skew 
 
+Kubernetes versions are expressed as x.y.z, where x is the major version, y is the minor version, and z is the patch version. The Kubernetes project maintains release branches for the most recent three minor releases (1.36, 1.35, 1.34).
+
+Applicable fixes, including security fixes, may be backported to those three release branches, depending on severity and feasibility.
+
 **what does version skew means ?**
 Different Kubernetes components in the same cluster are running different versions.
 ```
-API Server = 1.26
+API Server = 1.36
              │
-             ├── kubelet 1.26   ← no skew
-             ├── kubelet 1.25   ← 1 minor version skew
-             └── kubelet 1.24   ← 2 minor versions skew
+             ├── kubelet 1.36   ← no skew
+             ├── kubelet 1.35   ← 1 minor version skew
+             └── kubelet 1.34   ← 2 minor versions skew
 ```
 
-so api server = should be highest or equal number as compare to other compopenets 
+
+**API Server version** - ( in prod there should be more than one api server - master node)
+In highly-available (HA) clusters, the newest and oldest kube-apiserver instances must be within one minor version.
+
+Example:
+newest kube-apiserver is at 1.36
+other kube-apiserver instances are supported at 1.36 and 1.35
+
 
 **kubelet, kubeproxy, kube-controller-manager, kube-scheduler, and cloud-controller-manager Versions requirement**
 
