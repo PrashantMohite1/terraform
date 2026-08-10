@@ -140,3 +140,17 @@ kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.32.1
 # Install Calico Custom Resources (requires custom-resources.yaml)
 kubectl create -f custom-resources.yaml   
 ```
+
+cilium installation 
+
+```
+# Add the repository
+helm repo add cilium https://helm.cilium.io/
+helm repo update
+
+# Install with default settings
+helm install cilium cilium/cilium --version 1.20.0 --namespace kube-system
+
+# Or use OCI registry (Recommended for reproducible deployments)
+helm install cilium oci://quay.io/cilium/charts/cilium --version 1.20.0 --namespace kube-system   
+```
