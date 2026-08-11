@@ -65,6 +65,101 @@ kube-apiserver is at 1.36
 - kubectl is supported at 1.37, 1.36, and 1.35
 - kube-controller-manager, kube-scheduler, and cloud-controller-manager are supported at 1.36, 1.35
 
+
+
+### container runtime setup 
+
+Kubernetes starting v1.26 only works with v1 of the CRI API. If a container runtime does not support the v1 API, the kubelet will not register as a node.
+containerd version 1.6.0 or later supports the required v1 Container Runtime Interface (CRI) API.
+
+By default, the Linux kernel does not allow IPv4 packets to be routed between interfaces. Most Kubernetes cluster networking implementations will change this setting (if needed), but some might expect the administrator to do it for them.
+
+Enable IPv4 packet forwarding
+
+```
+# sysctl params required by setup, params persist across reboots
+cat <<EOF | sudo tee /etc/sysctl.d/k8s.conf
+net.ipv4.ip_forward = 1
+EOF
+
+# Apply sysctl params without reboot
+sudo sysctl --system
+
+# verify output should 1
+sysctl net.ipv4.ip_forward
+
+```
+
+
+### Control Groups 
+On Linux, control groups constrain resources that are allocated to processes.
+There are two versions of cgroups in Linux: cgroup v1 and cgroup v2. cgroup v2 is the new generation of the cgroup API.
+cgroup v2 provides a unified control system with enhanced resource management capabilities.
+
+Identify cgroups version in linux 
+```
+stat -fc %T /sys/fs/cgroup/
+```
+
+For cgroup v2, the output is cgroup2fs.
+For cgroup v1, the output is tmpfs.
+
+
+set systemd as cgroup manager for kubelet and container runtime 
+
+When systemd is chosen as the init system for a Linux distribution, the init process generates and consumes a root control group (cgroup) and acts as a cgroup manager.
+use systemd as the cgroup driver for the kubelet and the container runtime when systemd is the selected init system.
+
+What does “systemd is the init system” mean?
+
+When Linux boots, the first userspace process is started as PID 1.Its job is to start and manage other system processes/services.
+On most modern Linux distributions, that PID 1 process is systemd.
+
+command to check init system 
+```
+ps -p 1 -o comm=
+```
+
+Kubelet : edit kublet configuration yaml file 
+
+```
+apiVersion: kubelet.config.k8s.io/v1beta1
+kind: KubeletConfiguration
+...
+cgroupDriver: systemd
+```
+
+
+Configuring the systemd cgroup driver
+To use the systemd cgroup driver in /etc/containerd/config.toml with runc, set the following config based on your Containerd version
+
+command to check cgroup version :
+```
+stat -fc %T /sys/fs/cgroup/
+```
+
+Containerd versions 1.x:
+
+```
+[plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runc]
+  ...
+  [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runc.options]
+    SystemdCgroup = true
+```
+
+Containerd versions 2.x:
+
+```
+[plugins.'io.containerd.cri.v1.runtime'.containerd.runtimes.runc]
+  ...
+  [plugins.'io.containerd.cri.v1.runtime'.containerd.runtimes.runc.options]
+    SystemdCgroup = true
+
+```
+
+
+
+
 ---
 ### Installing kubeadm, kubelet and kubectl
 
@@ -115,6 +210,7 @@ kubeadm init <args>
 
 init options : 
 - (Recommended) If you have plans to upgrade this single control-plane kubeadm cluster to high availability you should specify the `--control-plane-endpoint` to set the shared endpoint for all control-plane nodes. Such an endpoint can be either a DNS name or an IP address of a load-balancer.
+--control-plane-endpoint=cluster-endpoint
 
 - Choose a Pod network add-on, and verify whether it requires any arguments to be passed to kubeadm init. Depending on which third-party provider you choose, you might need to set the `--pod-network-cidr` to a provider-specific value. See Installing a Pod network add-on.
 
@@ -125,6 +221,9 @@ sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
 sudo chown $(id -u):$(id -g) $HOME/.kube/config
 ```
 
+
+
+### Install CRI (container runtime interface) - networking plugin 
 
 
 CNI installation : 
@@ -154,3 +253,8 @@ helm install cilium cilium/cilium --version 1.20.0 --namespace kube-system
 # Or use OCI registry (Recommended for reproducible deployments)
 helm install cilium oci://quay.io/cilium/charts/cilium --version 1.20.0 --namespace kube-system   
 ```
+
+
+
+
+

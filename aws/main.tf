@@ -24,7 +24,7 @@ data aws_ami "ubuntu" {
 module "server-1"{
     source = "./modules/ec2/"
     ami_id = data.aws_ami.ubuntu.id 
-    instance_type = "t4g.small"
+    instance_type = "t2.micro"
     ec2_name = "master"
     subnet_id = aws_subnet.pub-sub-1.id
     vpc_security_group_ids = [aws_security_group.sg1.id]
