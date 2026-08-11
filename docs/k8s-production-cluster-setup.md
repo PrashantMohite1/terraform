@@ -255,6 +255,15 @@ helm install cilium oci://quay.io/cilium/charts/cilium --version 1.20.0 --namesp
 ```
 
 
+### Join worker nodes to master node 
+
+```
+kubeadm join <control-plane-host>:<control-plane-port> --token <token> --discovery-token-ca-cert-hash sha256:<hash>
+```
+
+
+
+
 
 
 
