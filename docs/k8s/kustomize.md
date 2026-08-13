@@ -1,7 +1,7 @@
 
 ---
 
-## 3. Kustomize Deep Dive
+## Kustomize Deep Dive
 
 ### What It Is
 A tool to customize Kubernetes YAMLs **without templates**. It uses a **Base + Overlay** pattern.
@@ -50,7 +50,7 @@ patches:
 
 ---
 
-## 4. How They Work Together
+## How kustomize and skaffold Work Together
 
 ### The Workflow
 1.  **Skaffold Build**: Builds image `my-app:git-abc123`.
