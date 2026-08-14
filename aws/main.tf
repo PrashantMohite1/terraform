@@ -20,48 +20,72 @@ data aws_ami "ubuntu" {
     owners = ["099720109477"] # Canonical
 }
 
+# 1. Create the IAM Role that allows EC2 to assume it
+resource "aws_iam_role" "ssm_role" {
+  name = "${local.env}-ssm-role"
 
-module "server-1"{
-    source = "./modules/ec2/"
-    ami_id = data.aws_ami.ubuntu.id 
-    instance_type = "t4g.small"
-    ec2_name = "master"
-    subnet_id = aws_subnet.pub-sub-1.id
-    vpc_security_group_ids = [aws_security_group.sg1.id]
-    associate_public_ip_address = true
-
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action    = "sts:AssumeRole"
+        Effect    = "Allow"
+        Principal = { Service = "ec2.amazonaws.com" } 
+      }
+    ]
+  })
 }
 
-# module "server-2"{
-#     source = "./modules/ec2/"
-#     ami_id = data.aws_ami.ubuntu.id 
-#     instance_type = "t4g.small"
-#     ec2_name = "worker-node-1"
-#     subnet_id = aws_subnet.pub-sub-1.id
-#     vpc_security_group_ids = [aws_security_group.sg1.id]
-#     associate_public_ip_address = true
+# 2. Attach the official AWS SSM Policy to the role
+resource "aws_iam_role_policy_attachment" "ssm_policy_attach" {
+  role       = aws_iam_role.ssm_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
 
-# }
+resource "aws_iam_instance_profile" "ssm_instance_profile" {
+  name = "${local.env}-ssm-instance-profile"
+  role = aws_iam_role.ssm_role.name
+}
+
+module "server_1"{
+    source = "./modules/ec2/"
+    ami_id = data.aws_ami.ubuntu.id 
+    instance_type = "t2.micro"
+    ec2_name = "master"
+    subnet_id = aws_subnet.private_sub_1.id
+    vpc_security_group_ids = [aws_security_group.sg1.id]
+    associate_public_ip_address = false
+    iam_instance_profile        = aws_iam_instance_profile.ssm_instance_profile.name
+} 
 
 module "vpc_1"{
     source = "./modules/vpc/"
-    cidr_block = "10.0.0.0/24"
+    cidr_block = "10.0.0.0/20"
     env = local.env
     vpc_name = "${local.env}-vpc"
     
 }
 
-resource "aws_subnet" "pub-sub-1" {
+resource "aws_subnet" "public_sub_1" {
   vpc_id     = module.vpc_1.vpc_id
-  cidr_block = "10.0.0.0/27"
+  cidr_block = "10.0.0.0/22"
 
   tags = {
-    Name = "${local.env}-pub-subnet"
+    Name = "${local.env}-public-subnet"
+  }
+}
+
+resource "aws_subnet" "private_sub_1" {
+  vpc_id     = module.vpc_1.vpc_id
+  cidr_block = "10.0.4.0/22"
+  tags = {
+    Name = "${local.env}-private-subnet"
   }
 }
 
 
-resource "aws_internet_gateway" "igw" {
+######## Internet Gateway ###########################
+resource "aws_internet_gateway" "internet_gw_1" {
   vpc_id = module.vpc_1.vpc_id
 
   tags = {
@@ -70,13 +94,57 @@ resource "aws_internet_gateway" "igw" {
 }
 
 
-resource "aws_route_table" "rt1" {
+####### NAT Gateway #################
+resource "aws_eip" "nat_eip" {
+  domain = "vpc"
+}
+
+resource "aws_nat_gateway" "nat_gw_1" {
+  allocation_id = aws_eip.nat_eip.id
+  subnet_id     = aws_subnet.public_sub_1.id
+
+  tags = {
+    Name = "${local.env}-nat-gw-1"
+  }
+
+  # To ensure proper ordering, it is recommended to add an explicit dependency
+  # on the Internet Gateway for the VPC.
+  depends_on = [aws_internet_gateway.internet_gw_1]
+}
+
+
+
+# resource "aws_nat_gateway_eip_association" "eip_association_1" {
+#   allocation_id  = aws_eip.nat_eip.id
+#   nat_gateway_id = aws_nat_gateway.nat_gw_1.id
+# }
+
+# public route table
+
+resource "aws_route_table" "public_rt1" {
   vpc_id = module.vpc_1.vpc_id
 
   # since this is exactly the route AWS will create, the route will be adopted
   route {
     cidr_block = "0.0.0.0/0"
-    gateway_id = aws_internet_gateway.igw.id
+    gateway_id = aws_internet_gateway.internet_gw_1.id
+  }
+
+tags = {
+  Name = "${local.env}-route-table-1"
+}
+
+}
+
+# private route table
+
+resource "aws_route_table" "private_rt1" {
+  vpc_id = module.vpc_1.vpc_id
+
+  # since this is exactly the route AWS will create, the route will be adopted
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_nat_gateway.nat_gw_1.id
   }
 
 tags = {
@@ -86,9 +154,14 @@ tags = {
 }
 
 
-resource "aws_route_table_association" "rt1_association" {
-  subnet_id      = aws_subnet.pub-sub-1.id
-  route_table_id = aws_route_table.rt1.id
+resource "aws_route_table_association" "public_rt1_association" {
+  subnet_id      = aws_subnet.public_sub_1.id
+  route_table_id = aws_route_table.public_rt1.id
+}
+
+resource "aws_route_table_association" "private_rt1_association" {
+  subnet_id      = aws_subnet.private_sub_1.id
+  route_table_id = aws_route_table.private_rt1.id
 }
 
 
@@ -114,4 +187,18 @@ resource "aws_security_group" "sg1" {
   }
 }
 
+
+
+resource "aws_ssm_association" "run_script" {
+  name = "AWS-RunShellScript"
+
+  targets {
+    key    = "InstanceIds"
+    values = [module.server_1.id]
+  }
+
+  parameters = {
+    commands = "echo 'Terraform triggered this via SSM!' > /tmp/ssm_output.txt"
+  }
+}
 
