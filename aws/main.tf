@@ -50,10 +50,21 @@ resource "aws_iam_instance_profile" "ssm_instance_profile" {
 module "server_1"{
     source = "./modules/ec2/"
     ami_id = data.aws_ami.ubuntu.id 
-    instance_type = "t2.micro"
+    instance_type = "t3.small"
     ec2_name = "master"
     subnet_id = aws_subnet.private_sub_1.id
     vpc_security_group_ids = [aws_security_group.sg1.id]
+    associate_public_ip_address = false
+    iam_instance_profile        = aws_iam_instance_profile.ssm_instance_profile.name
+} 
+
+module "server_2"{
+    source = "./modules/ec2/"
+    ami_id = data.aws_ami.ubuntu.id 
+    instance_type = "t3.small"
+    ec2_name = "worker-1"
+    subnet_id = aws_subnet.private_sub_1.id
+    vpc_security_group_ids = [aws_security_group.worker_sg1.id]
     associate_public_ip_address = false
     iam_instance_profile        = aws_iam_instance_profile.ssm_instance_profile.name
 } 
@@ -78,6 +89,7 @@ resource "aws_subnet" "public_sub_1" {
 resource "aws_subnet" "private_sub_1" {
   vpc_id     = module.vpc_1.vpc_id
   cidr_block = "10.0.4.0/22"
+  availability_zone = "us-east-1a"
   tags = {
     Name = "${local.env}-private-subnet"
   }
@@ -171,12 +183,46 @@ resource "aws_security_group" "sg1" {
   tags = {
     Name = "${local.env}-sg-1"
   }
+
+
   ingress {
-    description = "SSH"
-    from_port   = 22
-    to_port     = 22
+    description = "Kubernetes API server"
+    from_port   = 6443
+    to_port     = 6443
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    cidr_blocks = ["10.0.0.0/20"]
+  }
+
+  ingress {
+    description = "Used by kube-apiserver, etcd"
+    from_port   = 2379
+    to_port     = 2380
+    protocol    = "tcp"
+    cidr_blocks = ["10.0.0.0/20"]
+  }
+
+  ingress {
+    description = "kubelet API "
+    from_port   = 10250
+    to_port     = 10250
+    protocol    = "tcp"
+    cidr_blocks = ["10.0.0.0/20"]
+  }
+
+  ingress {
+    description = "kube-schedular"
+    from_port   = 10259
+    to_port     = 10259
+    protocol    = "tcp"
+    cidr_blocks = ["10.0.0.0/20"]
+  }
+
+  ingress {
+    description = "kube-control-manger"
+    from_port   = 10257
+    to_port     = 10257
+    protocol    = "tcp"
+    cidr_blocks = ["10.0.0.0/20"]
   }
 
   egress {
@@ -188,13 +234,55 @@ resource "aws_security_group" "sg1" {
 }
 
 
+resource "aws_security_group" "worker_sg1" {
+  vpc_id      = module.vpc_1.vpc_id
+
+  tags = {
+    Name = "${local.env}-sg-1"
+  }
+
+
+  ingress {
+    description = "Kubelet API"
+    from_port   = 10250
+    to_port     = 10250
+    protocol    = "tcp"
+    cidr_blocks = ["10.0.0.0/20"]
+  }
+
+  ingress {
+    description = "kube-proxy"
+    from_port   = 10256
+    to_port     = 10256
+    protocol    = "tcp"
+    cidr_blocks = ["10.0.0.0/20"]
+  }
+
+  ingress {
+    description = "NodePort Services"
+    from_port   = 30000
+    to_port     = 32767
+    protocol    = "tcp"
+    cidr_blocks = ["10.0.0.0/20"]
+  }
+
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+
 
 resource "aws_ssm_association" "run_script" {
   name = "AWS-RunShellScript"
 
   targets {
     key    = "InstanceIds"
-    values = [module.server_1.id]
+    values = [module.server_1.id,module.server_2.id ]
+    # values = [module.server_1.id]
   }
 
   parameters = {
