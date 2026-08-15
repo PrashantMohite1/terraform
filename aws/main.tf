@@ -50,8 +50,8 @@ resource "aws_iam_instance_profile" "ssm_instance_profile" {
 module "server_1"{
     source = "./modules/ec2/"
     ami_id = data.aws_ami.ubuntu.id 
-    # instance_type = "t3.small"
-    instance_type = "t2.micro"
+    instance_type = "t3.small"
+    # instance_type = "t2.micro"
     ec2_name = "master"
     subnet_id = aws_subnet.private_sub_1.id
     vpc_security_group_ids = [aws_security_group.sg1.id]
