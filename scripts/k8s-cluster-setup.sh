@@ -307,7 +307,6 @@ join_worker() {
 
     create_node_user "k8s-worker"
 
-    # Default AWS region fallback if REGION variable is unset
     local aws_region="${REGION:-us-east-1}"
     local param_name="${SSM_PARAM_NAME:-/k8s/join-command}"
 
@@ -318,7 +317,6 @@ join_worker() {
     local join_cmd=""
 
     for ((i=1; i<=max_attempts; i++)); do
-        # Fetch command from SSM Parameter Store
         join_cmd=$(aws ssm get-parameter \
             --name "$param_name" \
             --with-decryption \
@@ -326,7 +324,6 @@ join_worker() {
             --output text \
             --region "$aws_region" 2>/dev/null || true)
 
-        # Ensure string is non-empty and not AWS CLI's literal "None"
         if [[ -n "$join_cmd" && "$join_cmd" != "None" ]]; then
             echo "Successfully retrieved join command on attempt $i!"
             break
@@ -336,15 +333,33 @@ join_worker() {
         sleep "$sleep_seconds"
     done
 
-    # Timeout validation
     if [[ -z "$join_cmd" || "$join_cmd" == "None" ]]; then
-        echo "ERROR: Timed out waiting for join command from SSM Parameter Store after 5 minutes."
+        echo "ERROR: Timed out waiting for join command from SSM Parameter Store."
         exit 1
+    fi
+
+    # -----------------------------------------------------------------
+    # Extract Master IP & Port from join command and wait for API Server
+    # -----------------------------------------------------------------
+    MASTER_IP=$(echo "$join_cmd" | grep -oE '([0-9]{1,3}\.){3}[0-9]{1,3}:[0-9]+' | head -n1)
+    
+    if [[ -n "$MASTER_IP" ]]; then
+        HOST=$(echo "$MASTER_IP" | cut -d: -f1)
+        PORT=$(echo "$MASTER_IP" | cut -d: -f2)
+        
+        echo "Waiting for API Server ($HOST:$PORT) to become reachable..."
+        for ((j=1; j<=30; j++)); do
+            if nc -z -w 3 "$HOST" "$PORT" 2>/dev/null || curl -k -s "https://$HOST:$PORT/healthz" >/dev/null; then
+                echo "API Server on $HOST:$PORT is online and accepting connections!"
+                break
+            fi
+            echo "API Server not ready yet (Attempt $j/30)... waiting 10s"
+            sleep 10
+        done
     fi
 
     echo "Executing cluster join command..."
     
-    # Run with sudo to ensure full privileges for kubeadm
     if [ "$(id -u)" -eq 0 ]; then
         eval "$join_cmd"
     else
