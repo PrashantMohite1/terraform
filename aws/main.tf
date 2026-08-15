@@ -347,6 +347,11 @@ resource "aws_ssm_association" "run_script_for_master" {
       "sudo /k8s-setup/terraform/scripts/k8s-cluster-setup.sh master 2>&1 | sudo tee /k8s-setup/k8s-setup.log"
     ])
   }
+
+  depends_on = [
+    aws_nat_gateway.nat_gw_1
+  ]
+
 }
 
 
