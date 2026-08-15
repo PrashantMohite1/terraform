@@ -20,32 +20,80 @@ data aws_ami "ubuntu" {
     owners = ["099720109477"] # Canonical
 }
 
-# 1. Create the IAM Role that allows EC2 to assume it
-resource "aws_iam_role" "ssm_role" {
-  name = "${local.env}-ssm-role"
+# -----------------
+# ============================================================
+# 1. IAM Role for K8s EC2 Instances (Master & Worker)
+# ============================================================
+
+resource "aws_iam_role" "k8s_node_role" {
+  name = "k8s-node-ssm-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
       {
-        Action    = "sts:AssumeRole"
-        Effect    = "Allow"
-        Principal = { Service = "ec2.amazonaws.com" } 
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "ec2.amazonaws.com"
+        }
       }
     ]
   })
 }
 
-# 2. Attach the official AWS SSM Policy to the role
-resource "aws_iam_role_policy_attachment" "ssm_policy_attach" {
-  role       = aws_iam_role.ssm_role.name
+# ============================================================
+# 2. Custom Policy for SSM Parameter Store Access
+# ============================================================
+
+resource "aws_iam_policy" "ssm_parameter_policy" {
+  name        = "k8s-ssm-parameter-policy"
+  description = "Allows K8s nodes to read/write join command token in Parameter Store"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "K8sSSMParameterAccess"
+        Effect = "Allow"
+        Action = [
+          "ssm:PutParameter",
+          "ssm:GetParameter",
+          "ssm:GetParameters"
+        ]
+        Resource = "arn:aws:ssm:*:*:parameter/k8s/join-command"
+      }
+    ]
+  })
+}
+
+# ============================================================
+# 3. Attach Both Policies to the IAM Role
+# ============================================================
+
+# Attachment 1: AWS Managed SSM Core Policy (For Agent & Session Manager)
+resource "aws_iam_role_policy_attachment" "ssm_managed_core" {
+  role       = aws_iam_role.k8s_node_role.name
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 
-resource "aws_iam_instance_profile" "ssm_instance_profile" {
-  name = "${local.env}-ssm-instance-profile"
-  role = aws_iam_role.ssm_role.name
+# Attachment 2: Custom Parameter Store Policy (For K8s Token Exchange)
+resource "aws_iam_role_policy_attachment" "ssm_parameter_access" {
+  role       = aws_iam_role.k8s_node_role.name
+  policy_arn = aws_iam_policy.ssm_parameter_policy.arn
 }
+
+# ============================================================
+# 4. IAM Instance Profile (Bridge to EC2 Instances)
+# ============================================================
+
+resource "aws_iam_instance_profile" "k8s_instance_profile" {
+  name = "k8s-node-instance-profile"
+  role = aws_iam_role.k8s_node_role.name
+}
+
+
+#-------
 
 module "server_1"{
     source = "./modules/ec2/"
@@ -56,7 +104,7 @@ module "server_1"{
     subnet_id = aws_subnet.private_sub_1.id
     vpc_security_group_ids = [aws_security_group.sg1.id]
     associate_public_ip_address = false
-    iam_instance_profile        = aws_iam_instance_profile.ssm_instance_profile.name
+    iam_instance_profile        = aws_iam_instance_profile.k8s_instance_profile.name
 } 
 
 module "server_2"{
@@ -67,7 +115,7 @@ module "server_2"{
     subnet_id = aws_subnet.private_sub_1.id
     vpc_security_group_ids = [aws_security_group.worker_sg1.id]
     associate_public_ip_address = false
-    iam_instance_profile        = aws_iam_instance_profile.ssm_instance_profile.name
+    iam_instance_profile        = aws_iam_instance_profile.k8s_instance_profile.name
 } 
 
 module "vpc_1"{
