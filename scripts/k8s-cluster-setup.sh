@@ -315,7 +315,9 @@ join_worker() {
     local max_attempts=30
     local sleep_seconds=10
     local join_cmd=""
-
+    # -----------------------------------------------------------------
+    # Fetch join command from SSM (polling until Master updates it)
+    # -----------------------------------------------------------------
     for ((i=1; i<=max_attempts; i++)); do
         join_cmd=$(aws ssm get-parameter \
             --name "$param_name" \
@@ -324,7 +326,8 @@ join_worker() {
             --output text \
             --region "$aws_region" 2>/dev/null || true)
 
-        if [[ -n "$join_cmd" && "$join_cmd" != "None" ]]; then
+        # Make sure we don't break on initial placeholder ("PENDING")
+        if [[ -n "$join_cmd" && "$join_cmd" != "None" && "$join_cmd" != "PENDING" ]]; then
             echo "Successfully retrieved join command on attempt $i!"
             break
         fi
@@ -333,10 +336,12 @@ join_worker() {
         sleep "$sleep_seconds"
     done
 
-    if [[ -z "$join_cmd" || "$join_cmd" == "None" ]]; then
+    # Timeout safety check
+    if [[ -z "$join_cmd" || "$join_cmd" == "None" || "$join_cmd" == "PENDING" ]]; then
         echo "ERROR: Timed out waiting for join command from SSM Parameter Store."
         exit 1
     fi
+
 
     # -----------------------------------------------------------------
     # Extract Master IP & Port from join command and wait for API Server
