@@ -102,6 +102,7 @@ module "server_1"{
     # instance_type = "t2.micro"
     ec2_name = "master"
     subnet_id = aws_subnet.private_sub_1.id
+    private_ip = "10.0.4.11"
     vpc_security_group_ids = [aws_security_group.sg1.id]
     associate_public_ip_address = false
     iam_instance_profile        = aws_iam_instance_profile.k8s_instance_profile.name
@@ -113,6 +114,7 @@ module "server_2"{
     instance_type = "t3.small"
     ec2_name = "worker-1"
     subnet_id = aws_subnet.private_sub_1.id
+    private_ip = "10.0.4.12"
     vpc_security_group_ids = [aws_security_group.worker_sg1.id]
     associate_public_ip_address = false
     iam_instance_profile        = aws_iam_instance_profile.k8s_instance_profile.name
@@ -385,3 +387,16 @@ resource "aws_ssm_association" "run_script_for_workers" {
 
 }
 
+
+
+
+
+# resource "terraform_data" "ssm_cleanup" {
+#   # Triggers ensure this resource recreates if AWS region changes
+#   input = local.region
+
+#   provisioner "local-exec" {
+#     when    = destroy
+#     command = "aws ssm delete-parameter --name '/k8s/join-command' --region ${self.input} || true"
+#   }
+# }

@@ -5,6 +5,7 @@ resource aws_instance "ec2" {
     vpc_security_group_ids = var.vpc_security_group_ids
     subnet_id = var.subnet_id
     iam_instance_profile = var.iam_instance_profile
+    private_ip    = var.private_ip
     tags = {
         Name = var.ec2_name
     }
