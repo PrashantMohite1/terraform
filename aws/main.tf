@@ -372,5 +372,11 @@ resource "aws_ssm_association" "run_script_for_workers" {
       "sudo /k8s-setup/terraform/scripts/k8s-cluster-setup.sh worker 2>&1 | sudo tee /k8s-setup/k8s-setup.log"
     ])
   }
+
+# Guarantees Terraform starts master SSM association creation before worker
+  depends_on = [
+    aws_ssm_association.run_script_for_master
+  ]
+
 }
 
