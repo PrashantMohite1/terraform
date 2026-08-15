@@ -341,21 +341,34 @@ join_worker() {
     # -----------------------------------------------------------------
     # Extract Master IP & Port from join command and wait for API Server
     # -----------------------------------------------------------------
-    MASTER_IP=$(echo "$join_cmd" | grep -oE '([0-9]{1,3}\.){3}[0-9]{1,3}:[0-9]+' | head -n1)
+    local master_ip host port api_ready
+    master_ip=$(echo "$join_cmd" | awk '{print $3}')
     
-    if [[ -n "$MASTER_IP" ]]; then
-        HOST=$(echo "$MASTER_IP" | cut -d: -f1)
-        PORT=$(echo "$MASTER_IP" | cut -d: -f2)
+    echo "[+] Extracted API Server Endpoint (MASTER_IP):"
+    echo "$master_ip"
+    echo ""
+    
+    if [[ -n "$master_ip" ]]; then
+        host="${master_ip%%:*}"
+        port="${master_ip##*:}"
         
-        echo "Waiting for API Server ($HOST:$PORT) to become reachable..."
+        echo "Waiting for API Server ($host:$port) to become reachable..."
+        api_ready=false
+        
         for ((j=1; j<=30; j++)); do
-            if nc -z -w 3 "$HOST" "$PORT" 2>/dev/null || curl -k -s "https://$HOST:$PORT/healthz" >/dev/null; then
-                echo "API Server on $HOST:$PORT is online and accepting connections!"
+            if nc -z -w 3 "$host" "$port" 2>/dev/null || curl -k -s "https://$host:$port/healthz" >/dev/null; then
+                echo "API Server on $host:$port is online and accepting connections!"
+                api_ready=true
                 break
             fi
             echo "API Server not ready yet (Attempt $j/30)... waiting 10s"
             sleep 10
         done
+
+        if [ "$api_ready" = false ]; then
+            echo "ERROR: API Server at $host:$port was not reachable after 5 minutes."
+            exit 1
+        fi
     fi
 
     echo "Executing cluster join command..."
@@ -368,10 +381,6 @@ join_worker() {
 
     echo "Worker node successfully joined the cluster!"
 }
-
-
-
-
 
 # ============================================================
 # Main
@@ -438,4 +447,4 @@ esac
 echo
 echo "=========================================="
 echo " Kubernetes Setup Completed"
-echo "=========================================="s
+echo "=========================================="
