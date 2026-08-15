@@ -299,7 +299,6 @@ publish_join_information() {
 # ============================================================
 # Worker Join
 # ============================================================
-
 join_worker() {
     echo
     echo "=========================================="
@@ -308,34 +307,55 @@ join_worker() {
 
     create_node_user "k8s-worker"
 
-    echo "Fetching join command from SSM Parameter Store..."
+    # Default AWS region fallback if REGION variable is unset
+    local aws_region="${REGION:-us-east-1}"
+    local param_name="${SSM_PARAM_NAME:-/k8s/join-command}"
+
+    echo "Fetching join command from SSM Parameter Store ($param_name)..."
     
-    # Retry loop (attempts to fetch token for up to 5 minutes)
-    JOIN_CMD=""
-    for i in {1..30}; do
-        JOIN_CMD=$(aws ssm get-parameter \
-            --name "$SSM_PARAM_NAME" \
+    local max_attempts=30
+    local sleep_seconds=10
+    local join_cmd=""
+
+    for ((i=1; i<=max_attempts; i++)); do
+        # Fetch command from SSM Parameter Store
+        join_cmd=$(aws ssm get-parameter \
+            --name "$param_name" \
             --with-decryption \
             --query "Parameter.Value" \
             --output text \
-            --region "${REGION}" 2>/dev/null || true)
+            --region "$aws_region" 2>/dev/null || true)
 
-        if [[ -n "$JOIN_CMD" ]]; then
-            echo "Successfully retrieved join command."
+        # Ensure string is non-empty and not AWS CLI's literal "None"
+        if [[ -n "$join_cmd" && "$join_cmd" != "None" ]]; then
+            echo "Successfully retrieved join command on attempt $i!"
             break
         fi
 
-        echo "Waiting for control plane to publish join command (Attempt $i/30)..."
-        sleep 10
+        echo "Waiting for control plane to publish join command (Attempt $i/$max_attempts)... sleeping ${sleep_seconds}s"
+        sleep "$sleep_seconds"
     done
 
-    if [[ -z "$JOIN_CMD" ]]; then
-        echo "ERROR: Timed out waiting for join command from SSM Parameter Store."
+    # Timeout validation
+    if [[ -z "$join_cmd" || "$join_cmd" == "None" ]]; then
+        echo "ERROR: Timed out waiting for join command from SSM Parameter Store after 5 minutes."
         exit 1
     fi
 
-    eval "$JOIN_CMD"
+    echo "Executing cluster join command..."
+    
+    # Run with sudo to ensure full privileges for kubeadm
+    if [ "$(id -u)" -eq 0 ]; then
+        eval "$join_cmd"
+    else
+        eval "sudo $join_cmd"
+    fi
+
+    echo "Worker node successfully joined the cluster!"
 }
+
+
+
 
 
 # ============================================================
