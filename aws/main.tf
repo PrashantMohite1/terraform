@@ -59,16 +59,16 @@ module "server_1"{
     iam_instance_profile        = aws_iam_instance_profile.ssm_instance_profile.name
 } 
 
-# module "server_2"{
-#     source = "./modules/ec2/"
-#     ami_id = data.aws_ami.ubuntu.id 
-#     instance_type = "t3.small"
-#     ec2_name = "worker-1"
-#     subnet_id = aws_subnet.private_sub_1.id
-#     vpc_security_group_ids = [aws_security_group.worker_sg1.id]
-#     associate_public_ip_address = false
-#     iam_instance_profile        = aws_iam_instance_profile.ssm_instance_profile.name
-# } 
+module "server_2"{
+    source = "./modules/ec2/"
+    ami_id = data.aws_ami.ubuntu.id 
+    instance_type = "t3.small"
+    ec2_name = "worker-1"
+    subnet_id = aws_subnet.private_sub_1.id
+    vpc_security_group_ids = [aws_security_group.worker_sg1.id]
+    associate_public_ip_address = false
+    iam_instance_profile        = aws_iam_instance_profile.ssm_instance_profile.name
+} 
 
 module "vpc_1"{
     source = "./modules/vpc/"
@@ -277,17 +277,52 @@ resource "aws_security_group" "worker_sg1" {
 }
 
 
-resource "aws_ssm_association" "run_script" {
+resource "aws_ssm_association" "run_script_for_master" {
   name = "AWS-RunShellScript"
 
   targets {
     key    = "InstanceIds"
-    # values = [module.server_1.id,module.server_2.id ]
     values = [module.server_1.id]
   }
 
   parameters = {
-    commands = "echo 'Terraform triggered this via SSM!' > /tmp/ssm_output.txt"
+    commands = join("\n", [
+      "#!/bin/bash",
+      "set -e",
+      "# 1. Ensure git is installed",
+      "if command -v git >/dev/null 2>&1; then echo 'git installed'; else sudo apt-get update && sudo apt-get install -y git; fi",
+      "# 2. Clone repository into target folder",
+      "sudo mkdir -p /k8s-setup",
+      "sudo git clone https://github.com/PrashantMohite1/terraform.git /k8s-setup/terraform || (cd /k8s-setup/terraform && sudo git pull)",
+      "# 3. Make script executable and run master setup",
+      "sudo chmod +x /k8s-setup/terraform/scripts/k8s-cluster-setup.sh",
+      "sudo /k8s-setup/terraform/scripts/k8s-cluster-setup.sh master 2>&1 | sudo tee /k8s-setup/k8s-setup.log"
+    ])
+  }
+}
+
+
+resource "aws_ssm_association" "run_script_for_workers" {
+  name = "AWS-RunShellScript"
+
+  targets {
+    key    = "InstanceIds"
+    values = [module.server_2.id]
+  }
+
+  parameters = {
+    commands = join("\n", [
+      "#!/bin/bash",
+      "set -e",
+      "# 1. Ensure git is installed",
+      "if command -v git >/dev/null 2>&1; then echo 'git installed'; else sudo apt-get update && sudo apt-get install -y git; fi",
+      "# 2. Clone repository into target folder",
+      "sudo mkdir -p /k8s-setup",
+      "sudo git clone https://github.com/PrashantMohite1/terraform.git /k8s-setup/terraform || (cd /k8s-setup/terraform && sudo git pull)",
+      "# 3. Make script executable and run worker setup",
+      "sudo chmod +x /k8s-setup/terraform/scripts/k8s-cluster-setup.sh",
+      "sudo /k8s-setup/terraform/scripts/k8s-cluster-setup.sh worker 2>&1 | sudo tee /k8s-setup/k8s-setup.log"
+    ])
   }
 }
 
