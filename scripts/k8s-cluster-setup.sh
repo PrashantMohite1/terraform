@@ -143,6 +143,9 @@ install_containerd() {
     fi
 }
 
+un_command systemctl enable kubelet
+}
+
 
 # ============================================================
 # Install Kubernetes
@@ -151,16 +154,28 @@ install_containerd() {
 install_kubernetes() {
     echo
     echo "=========================================="
-    echo " Installing Kubernetes"
+    echo " Installing Kubernetes & AWS CLI"
     echo "=========================================="
 
+    # 1. Update apt and install basic dependencies
     run_command apt-get update
     run_command apt-get install -y \
         apt-transport-https \
         ca-certificates \
         curl \
         gpg \
-        awscli
+        unzip
+
+    # 2. Install AWS CLI v2 official binary if not present
+    if ! command -v aws &> /dev/null; then
+        echo "Installing AWS CLI v2..."
+        curl -sSL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "/tmp/awscliv2.zip"
+        unzip -q /tmp/awscliv2.zip -d /tmp
+        /tmp/awscliv2.zip_extracted/install --bin-dir /usr/bin --install-dir /usr/local/aws-cli || /tmp/aws/install --bin-dir /usr/bin --install-dir /usr/local/aws-cli
+        rm -rf /tmp/awscliv2.zip /tmp/aws
+    else
+        echo "AWS CLI is already installed."
+    fi
 
     run_command mkdir -p -m 755 /etc/apt/keyrings
 
@@ -183,7 +198,6 @@ EOF
     run_command apt-mark hold kubelet kubeadm kubectl
     run_command systemctl enable kubelet
 }
-
 
 # ============================================================
 # Create OS User with Sudo Access
