@@ -143,7 +143,7 @@ install_containerd() {
     fi
 }
 
-un_command systemctl enable kubelet
+run_command systemctl enable kubelet
 }
 
 
