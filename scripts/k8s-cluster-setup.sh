@@ -143,9 +143,6 @@ install_containerd() {
     fi
 }
 
-run_command systemctl enable kubelet
-}
-
 
 # ============================================================
 # Install Kubernetes
@@ -406,4 +403,4 @@ esac
 echo
 echo "=========================================="
 echo " Kubernetes Setup Completed"
-echo "=========================================="
+echo "=========================================="s
