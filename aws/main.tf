@@ -327,6 +327,19 @@ resource "aws_security_group" "worker_sg1" {
 }
 
 
+resource "aws_ssm_parameter" "k8s_join_command" {
+  name        = "/k8s/join-command"
+  type        = "SecureString"
+  value       = "PENDING"  # Placeholder value until Master boots
+  description = "K8s cluster join command"
+
+  # Prevents Terraform from reverting the token back to "PENDING" on future applies
+  lifecycle {
+    ignore_changes = [value]
+  }
+}
+
+
 resource "aws_ssm_association" "run_script_for_master" {
   name = "AWS-RunShellScript"
 
@@ -351,7 +364,7 @@ resource "aws_ssm_association" "run_script_for_master" {
   }
 
   depends_on = [
-    aws_nat_gateway.nat_gw_1
+    aws_nat_gateway.nat_gw_1, aws_ssm_parameter.k8s_join_command
   ]
 
 }
@@ -386,17 +399,3 @@ resource "aws_ssm_association" "run_script_for_workers" {
   ]
 
 }
-
-
-
-
-
-# resource "terraform_data" "ssm_cleanup" {
-#   # Triggers ensure this resource recreates if AWS region changes
-#   input = local.region
-
-#   provisioner "local-exec" {
-#     when    = destroy
-#     command = "aws ssm delete-parameter --name '/k8s/join-command' --region ${self.input} || true"
-#   }
-# }
