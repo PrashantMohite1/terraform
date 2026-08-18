@@ -7,6 +7,30 @@ https://kubernetes.io/docs/reference/networking/ports-and-protocols/
 command to check weather the port is open or not using netcat 
 nc <ip-addr> 22 -zv -w 2
 
+Prequirequisite steps 
+
+```
+
+    cat <<EOF | tee /etc/modules-load.d/k8s.conf
+overlay
+br_netfilter
+EOF
+
+# load overlay and br_netfilter kernel modules
+
+    modprobe overlay
+    modprobe br_netfilter
+
+    cat > /etc/sysctl.d/k8s.conf <<EOF
+net.bridge.bridge-nf-call-iptables  = 1
+net.bridge.bridge-nf-call-ip6tables = 1
+net.ipv4.ip_forward                 = 1
+EOF
+
+    run_command sysctl --system
+
+```
+
 ### Swap Memory 
 if swap memory is enabled on nodes - k8s will gives us error 
 The default behavior of a kubelet is to fail to start if swap memory is detected on a node. This means that swap should either be disabled or tolerated by kubelet.
