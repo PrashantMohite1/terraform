@@ -103,7 +103,7 @@ module "server_1"{
     ec2_name = "master"
     subnet_id = aws_subnet.private_sub_1.id
     private_ip = "10.0.4.11"
-    vpc_security_group_ids = [aws_security_group.sg1.id]
+    vpc_security_group_ids = [aws_security_group.sg1.id, aws_security_group.calico_sg_1.id]
     associate_public_ip_address = false
     iam_instance_profile        = aws_iam_instance_profile.k8s_instance_profile.name
 } 
@@ -115,7 +115,7 @@ module "server_2"{
     ec2_name = "worker-1"
     subnet_id = aws_subnet.private_sub_1.id
     private_ip = "10.0.4.12"
-    vpc_security_group_ids = [aws_security_group.worker_sg1.id]
+    vpc_security_group_ids = [aws_security_group.worker_sg1.id, aws_security_group.calico_sg_1.id ]
     associate_public_ip_address = false
     iam_instance_profile        = aws_iam_instance_profile.k8s_instance_profile.name
 } 
@@ -326,6 +326,46 @@ resource "aws_security_group" "worker_sg1" {
   }
 }
 
+########### security group for calico pods #######################################
+resource "aws_security_group" "calico_sg_1" {
+  vpc_id      = module.vpc_1.vpc_id
+
+  tags = {
+    Name = "${local.env}-calico-sg-1"
+  }
+}
+
+
+# Calico BGP
+resource "aws_vpc_security_group_ingress_rule" "calico_bgp" {
+  security_group_id            = aws_security_group.calico_sg_1.id
+  referenced_security_group_id = aws_security_group.calico_sg_1.id
+  ip_protocol = "tcp"
+  from_port   = 179
+  to_port     = 179
+  description = "Calico BGP between Kubernetes nodes"
+}
+
+
+# Calico IP-in-IP
+resource "aws_vpc_security_group_ingress_rule" "calico_ipip" {
+  security_group_id            = aws_security_group.calico_sg_1.id
+  referenced_security_group_id = aws_security_group.calico_sg_1.id
+  ip_protocol = "4"
+  description = "Calico IP-in-IP between Kubernetes nodes"
+}
+
+
+# Allow all outbound
+resource "aws_vpc_security_group_egress_rule" "all_outbound" {
+  security_group_id = aws_security_group.calico_sg_1.id
+  ip_protocol = "-1"
+  cidr_ipv4   = "0.0.0.0/0"
+  description = "Allow all outbound traffic"
+}
+
+
+# ############## ssm parameter #####################################
 
 resource "aws_ssm_parameter" "k8s_join_command" {
   name        = "/k8s/join-command"
