@@ -120,6 +120,19 @@ module "server_2"{
     iam_instance_profile        = aws_iam_instance_profile.k8s_instance_profile.name
 } 
 
+module "server_3"{
+    source = "./modules/ec2/"
+    ami_id = data.aws_ami.ubuntu.id 
+    instance_type = "t3.small"
+    ec2_name = "worker-2"
+    subnet_id = aws_subnet.private_sub_1.id
+    private_ip = "10.0.4.13"
+    vpc_security_group_ids = [aws_security_group.worker_sg1.id, aws_security_group.calico_sg_1.id ]
+    associate_public_ip_address = false
+    iam_instance_profile        = aws_iam_instance_profile.k8s_instance_profile.name
+} 
+
+
 module "vpc_1"{
     source = "./modules/vpc/"
     cidr_block = "10.0.0.0/20"
@@ -233,6 +246,8 @@ resource "aws_security_group" "sg1" {
 
   tags = {
     Name = "${local.env}-sg-1"
+    "kubernetes.io/cluster/kubernetes" = "owned"
+    
   }
 
 
@@ -290,6 +305,7 @@ resource "aws_security_group" "worker_sg1" {
 
   tags = {
     Name = "${local.env}-sg-1"
+    "kubernetes.io/cluster/kubernetes" = "owned"
   }
 
 
@@ -316,6 +332,7 @@ resource "aws_security_group" "worker_sg1" {
     protocol    = "tcp"
     cidr_blocks = ["10.0.0.0/20"]
   }
+  
 
 
   egress {
@@ -415,7 +432,7 @@ resource "aws_ssm_association" "run_script_for_workers" {
 
   targets {
     key    = "InstanceIds"
-    values = [module.server_2.id]
+    values = [module.server_2.id, module.server_3.id]
   }
 
   parameters = {

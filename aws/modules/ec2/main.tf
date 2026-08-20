@@ -15,6 +15,14 @@ resource aws_instance "ec2" {
     http_tokens                 = "required" # Enforces IMDSv2
     http_put_response_hop_limit = 2          # Allows the agent to fetch credentials
   }
+
+# Expand the root block device to 20 GB
+  root_block_device {
+    volume_size           = 20
+    volume_type           = "gp3"
+    delete_on_termination = true
+  }
+
 }
 
 
