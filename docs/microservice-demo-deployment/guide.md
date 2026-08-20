@@ -105,6 +105,8 @@ ightarrow$ **Security Groups**.
 
 ## Step 5: Deploy Public AWS Network Load Balancer (NLB)
 
+Note -: before this step make aws load balancer controller is installed, if not install it using aws-nlb-controller-installation.md then only you will be able to create load balancer with below yaml file 
+
 Expose the `frontend` service via a custom LoadBalancer manifest using instance-mode targeting.
 
 1. Save the following manifest as `external-svc-nlb.yaml`:
