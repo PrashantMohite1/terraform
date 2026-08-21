@@ -49,11 +49,18 @@ spec:
       containers:
       - name: controller
         args:
-        - --cluster-name=my-kubeadm-cluster    # Replace with your cluster name
-        - --aws-vpc-id=vpc-0123456789abcdef0   # Replace with your AWS VPC ID
+        - --cluster-name=kubernetes    # Replace with your cluster name
+        - --aws-vpc-id=vpc-011d404b571f3a74f   # Replace with your AWS VPC ID
         - --aws-region=us-east-1               # Replace with your AWS Region
 
 ```
+
+```
+# command to get current cluster name - bydefault cluster name is - kubernetes
+kubectl config view -o jsonpath='{.contexts[?(@.name=="'$(kubectl config current-context)'")].context.cluster}'
+
+```
+
 
 #### 2. crete policy >> attach to role and attache role to ec2 instance 
 

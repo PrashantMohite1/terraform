@@ -147,6 +147,7 @@ resource "aws_subnet" "public_sub_1" {
 
   tags = {
     Name = "${local.env}-public-subnet"
+    "kubernetes.io/role/elb" = 1
   }
 }
 
